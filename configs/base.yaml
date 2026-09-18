@@ -1,0 +1,81 @@
+# configs/base.yaml -- the reference config.
+#
+# Every field is listed so this file doubles as documentation of every knob.
+# All values here EQUAL the defaults in src/cle/config.py (a test enforces it).
+# Experiment configs should only state what they change, via overrides or a
+# smaller YAML file.
+
+experiment: default   # groups runs: runs/<experiment>/<run_id>/
+seed: 0               # part of the run id -> 5 seeds are 5 runs
+
+# ---------------------------------------------------------------- data
+data:
+  name: sine_freq_shift   # registry key ("dataset" category), built in step 2
+  params: {}              # adapter-specific; each adapter validates its own
+
+split:
+  scheme: group_holdout   # split by unit id, never by row (no leakage)
+  group_key: u            # Sample field holding the unit id
+  val_size: 0.1           # fraction of units
+  test_size: 0.2          # fraction of units; val + test must be < 1
+  target_labeled_n: 8     # labelled target-domain samples kept in train
+
+# ---------------------------------------------------------------- normalization
+# method: none | minmax | standard
+# scope:  none | joint | per_domain | per_unit   (statistics fit on train only)
+normalize:
+  features: {method: standard, scope: joint,  columns: {}}
+  labels:   {method: minmax,   scope: joint,  columns: {}}
+  physics:  {method: standard, scope: joint,  columns: {}}
+
+# ---------------------------------------------------------------- pairs
+pairs:
+  similarity: label_gap        # label_gap | physics_distance | hybrid
+  hybrid_alpha: 0.5            # hybrid only: weight on label_gap
+  physics_weights: null        # per-property weights; null = all ones
+  types: [within, cross]       # within-domain and/or cross-domain pairs
+  budget: 20000                # total pairs drawn
+  balance: cap_to_scarcer      # cap_to_scarcer | oversample_scarce | naive
+  binarize:                    # only margin-type losses use this; PSP ignores it
+    rule: none                 # none | threshold | quantile
+    value: null                # threshold value, or quantile in (0, 1)
+
+# ---------------------------------------------------------------- model
+encoder:
+  name: mlp                    # registry key ("encoder" category)
+  stem: shared                 # shared | per_domain (different sensor sets)
+  hidden: [64, 64]             # hidden layer widths
+  embed_dim: 2                 # 2 = the visualisation encoder
+  final_activation: linear     # linear | relu (relu can collapse -- known finding)
+  dropout: 0.0
+  append_domain_onehot: true   # feed the domain id to the encoder
+
+loss:
+  name: psp                    # registry key ("loss" category)
+  params: {}
+
+secondary:
+  probes: [ridge, mlp]         # both always run: probe capacity is a confound
+  ridge_alpha: 1.0
+  mlp_every_n_epochs: 10       # MLP probe is slow; ridge runs every epoch
+
+# ---------------------------------------------------------------- training
+train:
+  epochs: 200
+  batch_size: 256
+  optimizer: adamw             # adam | adamw
+  lr: 1.0e-3                   # write 1.0e-3, not 1e-3 (see note below)
+  weight_decay: 1.0e-4
+  scheduler: cosine            # none | cosine
+  grad_clip: 1.0               # null = no clipping
+  checkpoint_every: 10
+
+# ---------------------------------------------------------------- volatile
+# These do NOT enter the run id: same experiment on a different machine or
+# output folder is the same run. They are still written to the run directory.
+logging:
+  dir: runs
+
+run:
+  device: auto                 # auto | cpu | cuda
+  num_workers: 0
